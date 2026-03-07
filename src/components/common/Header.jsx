@@ -10,6 +10,16 @@ function TelanganaEmblem({ size = 56 }) {
          <img src="images/tgtwrei.jpg" alt="tLogo" />
   )
 }
+function TelanganaCM({ size = 56 }) {
+  return (
+         <img src="images/cm-card2.png" alt="tLogo" />
+  )
+}
+function TelanganaRaising({ size = 56 }) {
+  return (
+         <img src="images/Telangana Rising cure-pure-rare.png" alt="tLogo" />
+  )
+}
 
 // Rising Sun emblem SVG (left-2)
 function RisingSunEmblem({ size = 56 }) {
@@ -30,7 +40,7 @@ export default function Header() {
 
       {/* ── Main header row ───────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-2 sm:px-4 py-2 sm:py-3">
-        <div className="flex items-center gap-1.5 sm:gap-3">
+        <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3">
 
           {/* ── LEFT: Two govt emblems ─────────────────────────────────────── */}
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
@@ -79,7 +89,7 @@ export default function Header() {
           </div>
 
           {/* ── RIGHT: TGTWREIS Logo ──────────────────────────────────────── */}
-          <div className="flex-shrink-0">
+          {/* <div className="flex-shrink-0">
             <div className="w-10 h-10 sm:w-20 sm:h-20 rounded-full shadow-md overflow-hidden flex items-center justify-center"
                  >
               <img
@@ -92,8 +102,19 @@ export default function Header() {
                   e.target.nextSibling.style.display = 'flex'
                 }}
               />
-              {/* Fallback if image fails */}
+         
              
+            </div>
+          </div> */}
+
+             <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {/* Emblem 1 — Telangana Govt */}
+            <div className="w-10 h-10 sm:w-20 sm:h-20 rounded-full  shadow-md overflow-hidden flex items-center justify-center">
+              <TelanganaCM size={40} />
+            </div>
+            {/* Emblem 2 — Rising Sun */}
+            <div className="w-10 h-10 sm:w-20 sm:h-20 rounded-full  shadow-md overflow-hidden flex items-center justify-center">
+              <TelanganaRaising size={40} />
             </div>
           </div>
         </div>

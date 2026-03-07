@@ -19,7 +19,7 @@ function StepBar({ current }) {
           <div className="flex flex-col items-center">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black
               text-sm border-2 transition-all
-              ${current > s.id  ? 'border-2 border-white" style={{background:"#8B0000",border: text-white' :
+              ${current > s.id  ? 'border-2 border-white" style={{background:"#8B0000",border: text-pink' :
                 current === s.id ? 'text-white shadow-lg scale-110' :
                                    'bg-gray-100 border-gray-300 text-gray-400'}`}>
               {current > s.id ? '✓' : s.icon}
@@ -398,7 +398,7 @@ export default function RegistrationModal({ onClose }) {
              style={{background:'linear-gradient(135deg,#3d0000,#8B0000)'}}>
           <div>
             <h2 className="text-white font-black text-lg">📝 New Candidate Registration</h2>
-            <p className="text-red-200 text-xs font-semibold">TTWREIS Admission Portal 2025-26</p>
+            <p className="text-red-200 text-xs font-semibold">TTWREIS Admission Portal 2026-27</p>
           </div>
           <button type="button" onClick={onClose}
             className="text-white hover:text-red-300 font-black text-2xl leading-none">✕</button>
