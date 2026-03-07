@@ -110,7 +110,7 @@ export default function ApplicantDashboard() {
 
   const load = useCallback(() => {
     setLoading(true)
-    api.get( `http://localhost:8080/api/applicant/application-status`)
+    api.get(`https://ttwreis-backend.onrender.com/api/applicant/application-status`)
       .then(r  => setAppData(r.data))
       .catch(() => setAppData({ status:'NOT_STARTED', applicationFilled:false, paymentStatus:'PENDING', collegePriorities:[] }))
       .finally(() => setLoading(false))
