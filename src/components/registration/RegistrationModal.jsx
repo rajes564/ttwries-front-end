@@ -1,522 +1,437 @@
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { toast } from 'react-toastify';
-import { authAPI } from '../../context/AuthContext';
-import { X, CheckCircle, ChevronRight, ChevronLeft, Shield, User, MapPin } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useId } from 'react'
+import { toast } from 'react-toastify'
+import api from '../../api/axios'
+import { STATES, TELANGANA_DISTRICTS, ID_TYPES } from '../../utils/constants'
 
 const STEPS = [
-  { id: 1, label: 'Aadhaar Details', icon: Shield,  desc: 'Verify your Aadhaar' },
-  { id: 2, label: 'Personal Details', icon: User,    desc: 'Fill personal info' },
-  { id: 3, label: 'Address Details',  icon: MapPin,  desc: 'Enter address' },
-];
+  { id: 1, label: 'Aadhaar',  icon: '🪪' },
+  { id: 2, label: 'Personal', icon: '👤' },
+  { id: 3, label: 'Address',  icon: '🏠' },
+]
 
-const STATES       = ['Telangana','Andhra Pradesh','Maharashtra','Karnataka','Tamil Nadu','Kerala','Odisha'];
-const DISTRICTS_TS = ['Hyderabad','Khammam','Warangal','Karimnagar','Nizamabad','Adilabad','Nalgonda','Medak','Rangareddy','Mahaboobnagar'];
-const ID_TYPES     = ['PAN Card','Driving Licence','School Identity Card','Other Govt ID Card'];
+// ── ALL components at module level — zero inline component definitions ─────────
 
-// ── CaptchaWidget — standalone, defined OUTSIDE RegistrationModal ─────────────
-// (Defining inside parent would cause remount on every parent re-render)
-function CaptchaWidget({ onValidate }) {
-  const chars   = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const genCode = () => Array.from({length:5}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
-  const [code,  setCode]  = useState(genCode);
-  const [input, setInput] = useState('');
-  const [err,   setErr]   = useState('');
-
-  const refresh = () => { setCode(genCode()); setInput(''); setErr(''); onValidate(false); };
-
-  const validate = () => {
-    if (input.toUpperCase() === code) {
-      setErr(''); onValidate(true); return;
-    }
-    setErr('Incorrect CAPTCHA. Please try again.');
-    refresh();
-  };
-
+function StepBar({ current }) {
   return (
-    <div>
-      <label className="form-label">Security PIN (CAPTCHA) *</label>
-      <div className="flex gap-2 items-center">
-        <div
-          className="flex-shrink-0 w-32 h-11 rounded-lg border border-gray-300 flex items-center justify-center relative overflow-hidden cursor-pointer select-none"
-          style={{background:'linear-gradient(135deg,#e8f5e9,#f1f8e9)'}}
-          onClick={refresh} title="Click to refresh">
-          <div className="absolute inset-0" style={{backgroundImage:'repeating-linear-gradient(45deg,transparent,transparent 2px,rgba(26,107,46,0.05) 2px,rgba(26,107,46,0.05) 4px)'}}/>
-          <div className="absolute" style={{top:'40%',left:0,right:0,height:2,background:'rgba(26,107,46,0.2)',transform:'rotate(-3deg)'}}/>
-          <span className="font-black text-xl text-primary-700 z-10 tracking-widest"
-                style={{fontFamily:'Courier New, monospace',transform:'skewX(-5deg)'}}>{code}</span>
-        </div>
-        <button type="button" onClick={refresh}
-          className="h-11 w-10 border border-gray-300 rounded-lg flex items-center justify-center text-primary-700 hover:bg-primary-50 transition-colors"
-          title="Refresh">🔄</button>
-        <input
-          type="text"
-          className="form-input flex-1"
-          placeholder="Enter code"
-          maxLength={5}
-          value={input}
-          autoComplete="off"
-          onChange={e => setInput(e.target.value.toUpperCase())}
-          onBlur={validate}
-          style={{textTransform:'uppercase', letterSpacing:4}}
-        />
-      </div>
-      {err && <p className="form-error">{err}</p>}
+    <div className="flex items-center justify-center gap-0 mb-6">
+      {STEPS.map((s, i) => (
+        <React.Fragment key={s.id}>
+          <div className="flex flex-col items-center">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black
+              text-sm border-2 transition-all
+              ${current > s.id  ? 'border-2 border-white" style={{background:"#8B0000",border: text-white' :
+                current === s.id ? 'text-white shadow-lg scale-110' :
+                                   'bg-gray-100 border-gray-300 text-gray-400'}`}>
+              {current > s.id ? '✓' : s.icon}
+            </div>
+            <span className={`text-xs font-bold mt-1 text-center w-20 leading-tight
+              ${current === s.id ? 'text-red-700' : current > s.id ? 'text-red-800' : 'text-gray-400'}`}>
+              {s.label}
+            </span>
+          </div>
+          {i < STEPS.length - 1 && (
+            <div className={`h-0.5 w-8 sm:w-16 mb-5 mx-0.5 sm:mx-1 ${current > s.id ? 'bg-red-600' : 'bg-gray-200'}`} />
+          )}
+        </React.Fragment>
+      ))}
     </div>
-  );
+  )
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-export default function RegistrationModal({ onClose }) {
-  const [step,         setStep]         = useState(1);
-  const [formData,     setFormData]     = useState({});
-  const [sameAddress,  setSameAddress]  = useState(false);
-  const [captchaValid, setCaptchaValid] = useState(false);
-  const [loading,      setLoading]      = useState(false);
-  const [declared,     setDeclared]     = useState(false);
+// LabeledInput — standalone controlled input with its own stable id
+// Module-level, no closure over parent state → focus never lost
+function LabeledInput({ id, label, required, error, hint, type = 'text', value, onChange, ...rest }) {
+  return (
+    <div>
+      <label htmlFor={id} className="label">
+        {label}{required !== false && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <input
+        id={id}
+        type={type}
+        className="input-field"
+        value={value}
+        onChange={onChange}
+        {...rest}
+      />
+      {hint  && <p className="text-xs text-orange-600 font-semibold mt-0.5">{hint}</p>}
+      {error && <p className="text-xs text-red-500 font-bold mt-0.5">⚠ {error}</p>}
+    </div>
+  )
+}
 
-  // ── mode:'onBlur' is CRITICAL — 'onChange' re-renders on every keystroke
-  // which remounts dynamic child components and causes focus loss ──────────────
-  const {
-    register,
-    handleSubmit,
-    watch,
-    formState: { errors },
-    getValues,
-    setValue,
-    trigger,
-  } = useForm({ mode: 'onBlur' });
+function LabeledSelect({ id, label, required, error, value, onChange, options, placeholder, disabled }) {
+  return (
+    <div>
+      <label htmlFor={id} className="label">
+        {label}{required !== false && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <select id={id} className="input-field" value={value} onChange={onChange} disabled={disabled}>
+        <option value="">{placeholder || 'Select'}</option>
+        {options.map(o => <option key={o}>{o}</option>)}
+      </select>
+      {error && <p className="text-xs text-red-500 font-bold mt-0.5">⚠ {error}</p>}
+    </div>
+  )
+}
 
-  const aadhar = watch('aadhaarNumber');
-  const email  = watch('email');
-  const mobile = watch('mobile');
+function CaptchaField({ captchaText, captchaLoading, onRefresh, value, onChange, error }) {
+  return (
+    <div>
+      <label className="label">Security Code <span className="text-red-500">*</span></label>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={onRefresh} title="Click to refresh"
+          className="flex-shrink-0 w-full sm:w-32 h-12 border-2 rounded-lg
+                     flex items-center justify-center relative overflow-hidden
+                     bg-gradient-to-br from-green-50 to-emerald-100 select-none">
+          <div className="absolute inset-0 opacity-10"
+               style={{backgroundImage:'repeating-linear-gradient(45deg,#1b5e20,transparent 2px,transparent 8px)'}}/>
+          <div className="absolute h-px w-full bg-green-600 opacity-25" style={{top:'42%',transform:'rotate(-4deg)'}}/>
+          <div className="absolute h-px w-full bg-orange-400 opacity-20" style={{top:'64%',transform:'rotate(3deg)'}}/>
+          {captchaLoading
+            ? <span className="text-xs text-gray-400 italic relative z-10">Loading…</span>
+            : <span className="font-black text-xl tracking-[0.2em] text-green-900 relative z-10"
+                    style={{fontFamily:'monospace'}}>{captchaText}</span>}
+        </button>
+        <button type="button" onClick={onRefresh}
+          className="flex-shrink-0 border border-green-300 text-green-700 font-bold
+                     text-sm px-2 py-2 rounded-lg hover:bg-green-50 transition-colors">🔄</button>
+        <input type="text" className="input-field flex-1" placeholder="Type code"
+          maxLength={6} autoComplete="off" spellCheck={false}
+          value={value} onChange={e => onChange(e.target.value.toUpperCase())}
+          style={{letterSpacing:'0.15em'}}/>
+      </div>
+      {error && <p className="text-xs text-red-500 font-bold mt-1">⚠ {error}</p>}
+    </div>
+  )
+}
 
-  const handleSameAddress = (checked) => {
-    setSameAddress(checked);
-    if (checked) {
-      const v = getValues();
-      setValue('permanentCountry',  v.presentCountry  || 'India');
-      setValue('permanentState',    v.presentState    || '');
-      setValue('permanentDistrict', v.presentDistrict || '');
-      setValue('permanentMandal',   v.presentMandal   || '');
-      setValue('permanentVillage',  v.presentVillage  || '');
-      setValue('permanentPincode',  v.presentPincode  || '');
-    }
-  };
+// ── Step 1: Aadhaar ────────────────────────────────────────────────────────────
+function AadhaarStep({ onNext }) {
+  const [aadhaar, setAadhaar] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [errors,  setErrors]  = useState({})
 
-  const nextStep = async () => {
-    let fields = [];
-    if (step === 1) fields = ['aadhaarNumber','confirmAadhaarNumber'];
-    if (step === 2) fields = ['candidateName','fatherName','motherName','dob','email','confirmEmail','gender','mobile','confirmMobile','idType','idNumber'];
-    const ok = await trigger(fields);
-    if (ok) {
-      setFormData(prev => ({ ...prev, ...getValues() }));
-      setStep(s => s + 1);
-    }
-  };
-
-  const onSubmit = async (data) => {
-    if (!captchaValid) { toast.error('Please complete the CAPTCHA verification.'); return; }
-    if (!declared)     { toast.error('Please accept the declaration to proceed.'); return; }
-    setLoading(true);
-    try {
-      const payload = { ...formData, ...data };
-      const res = await authAPI.register(payload);
-      toast.success(
-        `✅ Registration Successful! Your Reg No: ${res.data.registrationNumber} has been sent to your mobile. Default password is your Date of Birth.`,
-        { autoClose: 8000 }
-      );
-      onClose();
-    } catch (err) {
-      toast.error(`❌ ${err.response?.data?.message || 'Registration failed. Please try again.'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleNext = (e) => {
+    e.preventDefault()
+    const err = {}
+    if (!aadhaar)                       err.aadhaar = 'Aadhaar number is required'
+    else if (!/^\d{12}$/.test(aadhaar)) err.aadhaar = 'Must be exactly 12 digits'
+    if (!confirm)                       err.confirm = 'Please confirm Aadhaar'
+    else if (aadhaar !== confirm)       err.confirm = 'Aadhaar numbers do not match'
+    if (Object.keys(err).length) { setErrors(err); return }
+    onNext({ aadhaarNumber: aadhaar, confirmAadhaar: confirm })
+  }
 
   return (
-    <div className="modal-overlay" onClick={e => { if (e.target===e.currentTarget) onClose(); }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+    <form onSubmit={handleNext} noValidate className="space-y-4">
+      <div className="border-l-4 rounded-r-lg p-3 text-xs font-semibold" style={{background:"#fff8e1",borderColor:"#ffd600",color:"#5a3a00"}}>
+        ℹ️ Enter your 12-digit Aadhaar number. It will be used to verify your identity.
+      </div>
+      <LabeledInput id="aadhaar" label="Aadhaar Number" inputMode="numeric" maxLength={12}
+        placeholder="Enter 12-digit Aadhaar" value={aadhaar} error={errors.aadhaar}
+        onChange={e => { setAadhaar(e.target.value.replace(/\D/g,'')); setErrors(p=>({...p,aadhaar:''})) }}/>
+      <p className="text-xs text-gray-400 font-medium -mt-3">{aadhaar.length}/12 digits</p>
+      <LabeledInput id="aadhaar-confirm" label="Confirm Aadhaar Number" inputMode="numeric" maxLength={12}
+        placeholder="Re-enter Aadhaar" value={confirm} error={errors.confirm}
+        onChange={e => { setConfirm(e.target.value.replace(/\D/g,'')); setErrors(p=>({...p,confirm:''})) }}/>
+      <div className="flex justify-end pt-2">
+        <button type="submit" className="btn-primary">Next → Personal Details</button>
+      </div>
+    </form>
+  )
+}
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4"
-             style={{background:'linear-gradient(135deg,#0f4a1e,#1a6b2e)'}}>
+// ── Step 2: Personal Details ───────────────────────────────────────────────────
+// Uses direct controlled inputs — NO wrapper components for text fields
+function PersonalStep({ onNext, onBack, saved }) {
+  const [form, setForm] = useState({
+    candidateName:'', fatherName:'', motherName:'', dateOfBirth:'',
+    gender:'', email:'', confirmEmail:'', mobileNumber:'', confirmMobile:'',
+    alternateMobile:'', idType:'', idNumber:'',
+    ...saved,
+  })
+  const [errors, setErrors] = useState({})
+
+  // useCallback so child inputs don't get a new onChange reference each render
+  const handleChange = useCallback((field) => (e) => {
+    setForm(p => ({...p, [field]: e.target.value}))
+    setErrors(p => ({...p, [field]: ''}))
+  }, [])
+
+  const handleNext = (e) => {
+    e.preventDefault()
+    const err = {}
+    if (!form.candidateName) err.candidateName = 'Name is required'
+    if (!form.fatherName)    err.fatherName    = "Father's name is required"
+    if (!form.motherName)    err.motherName    = "Mother's name is required"
+    if (!form.dateOfBirth)   err.dateOfBirth   = 'Date of birth is required'
+    if (!form.gender)        err.gender        = 'Gender is required'
+    if (!form.email)         err.email         = 'Email is required'
+    else if (!/\S+@\S+\.\S+/.test(form.email)) err.email = 'Invalid email'
+    if (!form.confirmEmail)  err.confirmEmail  = 'Please confirm email'
+    else if (form.email !== form.confirmEmail)  err.confirmEmail = 'Emails do not match'
+    if (!form.mobileNumber)  err.mobileNumber  = 'Mobile is required'
+    else if (!/^[6-9]\d{9}$/.test(form.mobileNumber)) err.mobileNumber = 'Invalid mobile (10 digits)'
+    if (!form.confirmMobile) err.confirmMobile = 'Please confirm mobile'
+    else if (form.mobileNumber !== form.confirmMobile) err.confirmMobile = 'Mobile numbers do not match'
+    if (!form.idType)        err.idType        = 'ID type is required'
+    if (!form.idNumber)      err.idNumber      = 'ID number is required'
+    if (Object.keys(err).length) { setErrors(err); return }
+    onNext(form)
+  }
+
+  return (
+    <form onSubmit={handleNext} noValidate className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <LabeledInput id="p-name"   label="Candidate Name"           value={form.candidateName}   error={errors.candidateName}  onChange={handleChange('candidateName')}  placeholder="Full name as per records"/>
+        <LabeledInput id="p-father" label="Father's / Guardian Name" value={form.fatherName}      error={errors.fatherName}     onChange={handleChange('fatherName')}     placeholder="Father's full name"/>
+        <LabeledInput id="p-mother" label="Mother's / Guardian Name" value={form.motherName}      error={errors.motherName}     onChange={handleChange('motherName')}     placeholder="Mother's full name"/>
+        <LabeledInput id="p-dob"    label="Date of Birth" type="date" value={form.dateOfBirth}    error={errors.dateOfBirth}    onChange={handleChange('dateOfBirth')}/>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <LabeledSelect id="p-gender" label="Gender" value={form.gender} error={errors.gender}
+          options={['Female','Male','Other (Third Gender)']}  placeholder="Select Gender"
+          onChange={handleChange('gender')}/>
+        <LabeledInput id="p-mobile"  label="Mobile Number"   type="tel" maxLength={10} value={form.mobileNumber}    error={errors.mobileNumber}   onChange={handleChange('mobileNumber')}   placeholder="10-digit mobile"/>
+        <LabeledInput id="p-mobile2" label="Confirm Mobile"  type="tel" maxLength={10} value={form.confirmMobile}   error={errors.confirmMobile}  onChange={handleChange('confirmMobile')}  placeholder="Re-enter mobile"/>
+        <LabeledInput id="p-altmob" label="Alternate Mobile" type="tel" maxLength={10} value={form.alternateMobile} required={false}              onChange={handleChange('alternateMobile')} placeholder="Optional"/>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <LabeledInput id="p-email"  label="Email Address" type="email" value={form.email}        error={errors.email}        onChange={handleChange('email')}        placeholder="your@email.com"/>
+        <LabeledInput id="p-email2" label="Confirm Email" type="email" value={form.confirmEmail} error={errors.confirmEmail} onChange={handleChange('confirmEmail')} placeholder="Re-enter email"/>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <LabeledSelect id="p-idtype" label="ID Type" value={form.idType} error={errors.idType}
+          options={ID_TYPES} placeholder="Select ID Type" onChange={handleChange('idType')}/>
+        <LabeledInput id="p-idno" label="ID Number" value={form.idNumber} error={errors.idNumber}
+          onChange={handleChange('idNumber')} placeholder="Enter ID number"/>
+      </div>
+      <div className="flex justify-between pt-2">
+        <button type="button" onClick={onBack} className="btn-secondary">← Back</button>
+        <button type="submit" className="btn-primary">Next → Address Details</button>
+      </div>
+    </form>
+  )
+}
+
+// ── Step 3: Address + CAPTCHA + Declaration ────────────────────────────────────
+function AddressStep({ onSubmit, onBack, saved, loading }) {
+  const [form, setForm] = useState({
+    pCountry:'India', pState:'', pDistrict:'', pMandal:'', pVillage:'', pPincode:'',
+    permCountry:'India', permState:'', permDistrict:'', permMandal:'', permVillage:'', permPincode:'',
+    sameAsPresent: false,
+    ...saved,
+  })
+  const [errors,      setErrors]      = useState({})
+  const [captchaId,   setCaptchaId]   = useState('')
+  const [captchaText, setCaptchaText] = useState('')
+  const [captchaVal,  setCaptchaVal]  = useState('')
+  const [captchaLoad, setCaptchaLoad] = useState(false)
+  const [declared,    setDeclared]    = useState(false)
+
+  const fetchCaptcha = useCallback(async () => {
+    setCaptchaLoad(true); setCaptchaVal('')
+    try {
+      const res = await api.get('/captcha/generate')
+      setCaptchaId(res.data.captchaId); setCaptchaText(res.data.text)
+    } catch { toast.error('Could not load security code. Is the backend running?') }
+    finally  { setCaptchaLoad(false) }
+  }, [])
+
+  useEffect(() => { fetchCaptcha() }, [fetchCaptcha])
+
+  // useCallback so input onChanges are stable references
+  const handleChange = useCallback((field) => (e) => {
+    const val = e.target ? e.target.value : e   // handle both event and raw value
+    setForm(p => {
+      const next = { ...p, [field]: val }
+      if (field === 'sameAsPresent' && val) {
+        next.permCountry = next.pCountry; next.permState    = next.pState
+        next.permDistrict= next.pDistrict; next.permMandal  = next.pMandal
+        next.permVillage = next.pVillage;  next.permPincode = next.pPincode
+      }
+      return next
+    })
+    setErrors(p => ({...p, [field]: ''}))
+  }, [])
+
+  const handleCheckbox = useCallback((e) => {
+    const val = e.target.checked
+    setForm(p => {
+      const next = {...p, sameAsPresent: val}
+      if (val) {
+        next.permCountry = next.pCountry; next.permState    = next.pState
+        next.permDistrict= next.pDistrict; next.permMandal  = next.pMandal
+        next.permVillage = next.pVillage;  next.permPincode = next.pPincode
+      }
+      return next
+    })
+  }, [])
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    const err = {}
+    if (!form.pState)       err.pState       = 'Required'
+    if (!form.pDistrict)    err.pDistrict    = 'Required'
+    if (!form.pMandal)      err.pMandal      = 'Required'
+    if (!form.pVillage)     err.pVillage     = 'Required'
+    if (!form.pPincode)     err.pPincode     = 'Required'
+    if (!form.permState)    err.permState    = 'Required'
+    if (!form.permDistrict) err.permDistrict = 'Required'
+    if (!form.permMandal)   err.permMandal   = 'Required'
+    if (!form.permVillage)  err.permVillage  = 'Required'
+    if (!form.permPincode)  err.permPincode  = 'Required'
+    if (!captchaVal.trim()) err.captcha      = 'Enter the security code'
+    if (!declared)          err.declared     = 'You must accept the declaration'
+    if (Object.keys(err).length) { setErrors(err); return }
+    onSubmit({ ...form, captchaId, captchaInput: captchaVal.trim() })
+  }
+
+  const dis = form.sameAsPresent
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      {/* Present Address */}
+      <div className="form-section">
+        <div className="section-title">📍 Present Address</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <LabeledInput  id="p-country"  label="Country"       value={form.pCountry}  onChange={handleChange('pCountry')}/>
+          <LabeledSelect id="p-state"    label="State"         value={form.pState}    onChange={handleChange('pState')}    error={errors.pState}    options={STATES}/>
+          <LabeledSelect id="p-district" label="District"      value={form.pDistrict} onChange={handleChange('pDistrict')} error={errors.pDistrict} options={TELANGANA_DISTRICTS}/>
+          <LabeledInput  id="p-mandal"   label="Mandal"        value={form.pMandal}   onChange={handleChange('pMandal')}   error={errors.pMandal}   placeholder="Enter Mandal"/>
+          <LabeledInput  id="p-village"  label="Village / Town" value={form.pVillage} onChange={handleChange('pVillage')}  error={errors.pVillage}  placeholder="Enter Village/Town"/>
+          <LabeledInput  id="p-pin"      label="PIN Code" inputMode="numeric" maxLength={6}
+            value={form.pPincode} onChange={handleChange('pPincode')} error={errors.pPincode} placeholder="6-digit PIN"/>
+        </div>
+      </div>
+
+      {/* Permanent Address */}
+      <div className="form-section">
+        <div className="section-title">🏠 Permanent Address</div>
+        <label className="flex items-center gap-2 mb-3 cursor-pointer">
+          <input type="checkbox" className="w-4 h-4 accent-primary-600"
+            checked={form.sameAsPresent} onChange={handleCheckbox}/>
+          <span className="text-sm font-bold text-primary-700">Same as Present Address</span>
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <LabeledInput  id="pm-country"  label="Country"       value={form.permCountry}  disabled={dis} onChange={handleChange('permCountry')}/>
+          <LabeledSelect id="pm-state"    label="State"         value={form.permState}    disabled={dis} onChange={handleChange('permState')}    error={errors.permState}    options={STATES}/>
+          <LabeledSelect id="pm-district" label="District"      value={form.permDistrict} disabled={dis} onChange={handleChange('permDistrict')} error={errors.permDistrict} options={TELANGANA_DISTRICTS}/>
+          <LabeledInput  id="pm-mandal"   label="Mandal"        value={form.permMandal}   disabled={dis} onChange={handleChange('permMandal')}   error={errors.permMandal}   placeholder="Enter Mandal"/>
+          <LabeledInput  id="pm-village"  label="Village / Town" value={form.permVillage} disabled={dis} onChange={handleChange('permVillage')}  error={errors.permVillage}  placeholder="Enter Village/Town"/>
+          <LabeledInput  id="pm-pin"      label="PIN Code" inputMode="numeric" maxLength={6}
+            value={form.permPincode} disabled={dis} onChange={handleChange('permPincode')} error={errors.permPincode} placeholder="6-digit PIN"/>
+        </div>
+      </div>
+
+      {/* CAPTCHA */}
+      <div className="form-section">
+        <div className="section-title">🔐 Security Verification</div>
+        <CaptchaField captchaText={captchaText} captchaLoading={captchaLoad}
+          onRefresh={fetchCaptcha} value={captchaVal}
+          onChange={v => { setCaptchaVal(v); setErrors(p=>({...p,captcha:''})) }}
+          error={errors.captcha}/>
+        <p className="text-xs text-gray-400 font-semibold mt-1">
+          Security code is verified server-side and expires in 5 minutes.
+        </p>
+      </div>
+
+      {/* Declaration */}
+      <div className="form-section bg-amber-50 border border-amber-200">
+        <div className="section-title text-amber-800">📜 Declaration</div>
+        <p className="text-xs text-gray-700 font-medium leading-relaxed mb-3">
+          I have carefully reviewed and fully understood the guidelines and fee structure.
+          I confirm that all information provided is accurate and I agree to comply with
+          all TTWREIS admission rules and regulations.
+        </p>
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" className="mt-0.5 w-4 h-4 accent-primary-600"
+            checked={declared}
+            onChange={e => { setDeclared(e.target.checked); setErrors(p=>({...p,declared:''})) }}/>
+          <span className="text-xs font-bold text-gray-700">
+            I have read and agree to the above declaration <span className="text-red-500">*</span>
+          </span>
+        </label>
+        {errors.declared && <p className="text-xs text-red-500 font-bold mt-1">⚠ {errors.declared}</p>}
+      </div>
+
+      <div className="flex justify-between pt-2">
+        <button type="button" onClick={onBack} className="btn-secondary">← Back</button>
+        <button type="submit" disabled={loading || captchaLoad}
+          className="btn-primary min-w-36 disabled:opacity-60 disabled:cursor-not-allowed">
+          {loading ? '⏳ Registering...' : '✅ Register Now'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// ── Main Modal ─────────────────────────────────────────────────────────────────
+export default function RegistrationModal({ onClose }) {
+  const [step,     setStep]     = useState(1)
+  const [formData, setFormData] = useState({})
+  const [loading,  setLoading]  = useState(false)
+  const [success,  setSuccess]  = useState(null)
+
+  const next1 = useCallback((data) => { setFormData(d => ({...d,...data})); setStep(2) }, [])
+  const next2 = useCallback((data) => { setFormData(d => ({...d,...data})); setStep(3) }, [])
+  const back1 = useCallback(() => setStep(1), [])
+  const back2 = useCallback(() => setStep(2), [])
+
+  const handleFinalSubmit = useCallback(async (data) => {
+    setLoading(true)
+    try {
+      const res = await api.post('/registration/register', { ...formData, ...data })
+      setSuccess(res.data)
+      toast.success(`🎉 Registration Successful! ID: ${res.data.registrationNumber}`)
+    } catch (e) {
+      toast.error(`❌ ${e.response?.data?.message || 'Registration failed. Please try again.'}`)
+    } finally { setLoading(false) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-white w-full sm:max-w-2xl sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[95vh] sm:max-h-[92vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0"
+             style={{background:'linear-gradient(135deg,#3d0000,#8B0000)'}}>
           <div>
-            <h2 className="text-white font-black text-lg">New Candidate Registration</h2>
-            <p className="text-white/70 text-xs font-semibold">TGTWREIS V-CET 2025 — Online Admission Portal</p>
+            <h2 className="text-white font-black text-lg">📝 New Candidate Registration</h2>
+            <p className="text-red-200 text-xs font-semibold">TTWREIS Admission Portal 2025-26</p>
           </div>
-          <button onClick={onClose}
-            className="text-white/70 hover:text-white hover:bg-white/20 rounded-full p-1.5 transition-all">
-            <X size={20}/>
-          </button>
+          <button type="button" onClick={onClose}
+            className="text-white hover:text-red-300 font-black text-2xl leading-none">✕</button>
         </div>
 
-        {/* Step Indicator */}
-        <div className="flex items-center px-6 py-4 bg-gray-50 border-b">
-          {STEPS.map((s, i) => {
-            const Icon = s.icon;
-            const done   = step > s.id;
-            const active = step === s.id;
-            return (
-              <React.Fragment key={s.id}>
-                <div className="flex flex-col items-center">
-                  <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-black text-sm transition-all duration-300 ${
-                    done   ? 'bg-green-500 border-green-500 text-white'
-                  : active ? 'bg-primary-700 border-primary-700 text-white'
-                  :          'bg-white border-gray-300 text-gray-400'}`}>
-                    {done ? <CheckCircle size={18}/> : <Icon size={16}/>}
-                  </div>
-                  <div className={`text-xs font-bold mt-1 text-center w-24 ${
-                    active ? 'text-primary-700' : done ? 'text-green-600' : 'text-gray-400'}`}>
-                    {s.label}
-                  </div>
+        <div className="overflow-y-auto flex-1 px-4 py-4 sm:p-6">
+          {success ? (
+            <div className="text-center py-8">
+              <div className="text-6xl mb-4">🎉</div>
+              <h3 className="text-2xl font-black mb-2" style={{color:"#8B0000"}}>Registration Successful!</h3>
+              <div className="border-2 rounded-xl p-5 inline-block text-left mt-2 max-w-sm w-full" style={{background:"#fdf2f2",borderColor:"#8B0000"}}>
+                <p className="text-sm font-bold text-gray-700">Your Registration Number:</p>
+                <p className="text-3xl font-black mt-1 tracking-wider" style={{color:"#8B0000"}}>{success.registrationNumber}</p>
+                <div className="mt-3 space-y-1">
+                  <p className="text-xs text-gray-600 font-semibold">🔑 Default Password: <strong>Date of Birth (DD-MM-YYYY)</strong></p>
+                  <p className="text-xs text-gray-600 font-semibold">📱 Sent to mobile: {success.mobile}</p>
                 </div>
-                {i < STEPS.length-1 && (
-                  <div className={`flex-1 h-0.5 mx-2 mb-5 transition-all duration-300 ${
-                    step > s.id ? 'bg-green-500' : 'bg-gray-200'}`}/>
-                )}
-              </React.Fragment>
-            );
-          })}
+              </div>
+              <div className="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 font-semibold max-w-sm mx-auto">
+                ⚠️ Save your Registration Number — you need it to login and track your application.
+              </div>
+              <button type="button" onClick={onClose} className="btn-primary mt-6 px-8">Go to Login →</button>
+            </div>
+          ) : (
+            <>
+              <StepBar current={step}/>
+              {step === 1 && <AadhaarStep  onNext={next1}/>}
+              {step === 2 && <PersonalStep onNext={next2} onBack={back1} saved={formData}/>}
+              {step === 3 && <AddressStep  onSubmit={handleFinalSubmit} onBack={back2} saved={formData} loading={loading}/>}
+            </>
+          )}
         </div>
-
-        {/* Form Body */}
-        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-
-          {/* ── STEP 1: Aadhaar ────────────────────────────────────────────── */}
-          {step === 1 && (
-            <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800 font-semibold">
-                🔒 Your Aadhaar details are encrypted and stored securely as per Government guidelines.
-              </div>
-              <div>
-                <label className="form-label">Aadhaar Number *</label>
-                <input
-                  id="aadhaarNumber"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={12}
-                  className="form-input"
-                  placeholder="Enter 12-digit Aadhaar number"
-                  autoComplete="off"
-                  {...register('aadhaarNumber', {
-                    required: 'Aadhaar number is required',
-                    pattern: { value:/^\d{12}$/, message:'Aadhaar must be exactly 12 digits' },
-                  })}
-                />
-                {errors.aadhaarNumber && <p className="form-error">{errors.aadhaarNumber.message}</p>}
-              </div>
-              <div>
-                <label className="form-label">Confirm Aadhaar Number *</label>
-                <input
-                  id="confirmAadhaarNumber"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={12}
-                  className="form-input"
-                  placeholder="Re-enter 12-digit Aadhaar number"
-                  autoComplete="off"
-                  {...register('confirmAadhaarNumber', {
-                    required: 'Please confirm Aadhaar number',
-                    validate: v => v === aadhar || 'Aadhaar numbers do not match',
-                  })}
-                />
-                {errors.confirmAadhaarNumber && <p className="form-error">{errors.confirmAadhaarNumber.message}</p>}
-              </div>
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-800 font-semibold">
-                ⚠️ Ensure the Aadhaar number belongs to the candidate. Providing false information is an offence.
-              </div>
-            </div>
-          )}
-
-          {/* ── STEP 2: Personal Details ───────────────────────────────────── */}
-          {step === 2 && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-
-                <div className="col-span-2">
-                  <label className="form-label">Candidate Name *</label>
-                  <input id="candidateName" className="form-input" placeholder="Full name as per Aadhaar"
-                    autoComplete="name"
-                    {...register('candidateName', { required:'Candidate name is required', minLength:{value:2,message:'Name too short'} })}/>
-                  {errors.candidateName && <p className="form-error">{errors.candidateName.message}</p>}
-                </div>
-
-                <div>
-                  <label className="form-label">Father's / Guardian Name *</label>
-                  <input id="fatherName" className="form-input" placeholder="Father / Guardian name"
-                    autoComplete="off"
-                    {...register('fatherName', { required:"Father/Guardian name is required" })}/>
-                  {errors.fatherName && <p className="form-error">{errors.fatherName.message}</p>}
-                </div>
-
-                <div>
-                  <label className="form-label">Mother's Name *</label>
-                  <input id="motherName" className="form-input" placeholder="Mother name"
-                    autoComplete="off"
-                    {...register('motherName', { required:"Mother's name is required" })}/>
-                  {errors.motherName && <p className="form-error">{errors.motherName.message}</p>}
-                </div>
-
-                <div>
-                  <label className="form-label">Date of Birth *</label>
-                  <input id="dob" type="date" className="form-input"
-                    {...register('dob', { required:'Date of Birth is required' })}/>
-                  {errors.dob && <p className="form-error">{errors.dob.message}</p>}
-                </div>
-
-                <div>
-                  <label className="form-label">Gender *</label>
-                  <select id="gender" className="form-input" {...register('gender', { required:'Gender is required' })}>
-                    <option value="">Select Gender</option>
-                    <option value="FEMALE">Female</option>
-                    <option value="MALE">Male</option>
-                    <option value="OTHER">Other</option>
-                  </select>
-                  {errors.gender && <p className="form-error">{errors.gender.message}</p>}
-                </div>
-
-                <div>
-                  <label className="form-label">Email Address *</label>
-                  <input id="email" type="email" className="form-input" placeholder="your@email.com"
-                    autoComplete="email"
-                    {...register('email', { required:'Email is required', pattern:{value:/^[^\s@]+@[^\s@]+\.[^\s@]+$/,message:'Invalid email'} })}/>
-                  {errors.email && <p className="form-error">{errors.email.message}</p>}
-                </div>
-
-                <div>
-                  <label className="form-label">Confirm Email Address *</label>
-                  <input id="confirmEmail" type="email" className="form-input" placeholder="Re-enter email"
-                    autoComplete="off"
-                    {...register('confirmEmail', { required:'Please confirm email', validate: v => v===email || 'Emails do not match' })}/>
-                  {errors.confirmEmail && <p className="form-error">{errors.confirmEmail.message}</p>}
-                </div>
-
-                <div>
-                  <label className="form-label">Mobile Number *</label>
-                  <input id="mobile" type="tel" className="form-input" placeholder="10-digit mobile"
-                    maxLength={10} autoComplete="tel"
-                    {...register('mobile', { required:'Mobile is required', pattern:{value:/^[6-9]\d{9}$/,message:'Enter valid 10-digit mobile number'} })}/>
-                  {errors.mobile && <p className="form-error">{errors.mobile.message}</p>}
-                </div>
-
-                <div>
-                  <label className="form-label">Confirm Mobile Number *</label>
-                  <input id="confirmMobile" type="tel" className="form-input" placeholder="Re-enter mobile"
-                    maxLength={10} autoComplete="off"
-                    {...register('confirmMobile', { required:'Please confirm mobile', validate: v => v===mobile || 'Mobile numbers do not match' })}/>
-                  {errors.confirmMobile && <p className="form-error">{errors.confirmMobile.message}</p>}
-                </div>
-
-                <div>
-                  <label className="form-label">Alternate Mobile</label>
-                  <input id="alternateMobile" type="tel" className="form-input" placeholder="Optional"
-                    maxLength={10} autoComplete="off"
-                    {...register('alternateMobile', { pattern:{value:/^[6-9]\d{9}$/,message:'Enter valid mobile number'} })}/>
-                  {errors.alternateMobile && <p className="form-error">{errors.alternateMobile.message}</p>}
-                </div>
-
-                <div>
-                  <label className="form-label">Identification Type *</label>
-                  <select id="idType" className="form-input" {...register('idType', { required:'ID type is required' })}>
-                    <option value="">Select ID Type</option>
-                    {ID_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                  {errors.idType && <p className="form-error">{errors.idType.message}</p>}
-                </div>
-
-                <div className="col-span-2">
-                  <label className="form-label">Identification Number *</label>
-                  <input id="idNumber" className="form-input" placeholder="Enter ID number"
-                    autoComplete="off"
-                    {...register('idNumber', { required:'ID number is required' })}/>
-                  {errors.idNumber && <p className="form-error">{errors.idNumber.message}</p>}
-                </div>
-
-              </div>
-            </div>
-          )}
-
-          {/* ── STEP 3: Address + CAPTCHA + Declaration ────────────────────── */}
-          {step === 3 && (
-            <div className="space-y-4">
-
-              {/* Present Address */}
-              <div>
-                <h3 className="font-black text-primary-800 text-sm uppercase tracking-wide mb-3 flex items-center gap-2">
-                  <span className="w-6 h-6 bg-primary-700 rounded-full text-white text-xs flex items-center justify-center font-black">P</span>
-                  Present Address
-                </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="form-label">Country *</label>
-                    <input id="presentCountry" className="form-input" defaultValue="India" autoComplete="off"
-                      {...register('presentCountry', { required:'Country is required' })}/>
-                    {errors.presentCountry && <p className="form-error">{errors.presentCountry.message}</p>}
-                  </div>
-                  <div>
-                    <label className="form-label">State *</label>
-                    <select id="presentState" className="form-input"
-                      {...register('presentState', { required:'State is required' })}>
-                      <option value="">Select State</option>
-                      {STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    {errors.presentState && <p className="form-error">{errors.presentState.message}</p>}
-                  </div>
-                  <div>
-                    <label className="form-label">District *</label>
-                    <select id="presentDistrict" className="form-input"
-                      {...register('presentDistrict', { required:'District is required' })}>
-                      <option value="">Select District</option>
-                      {DISTRICTS_TS.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                    {errors.presentDistrict && <p className="form-error">{errors.presentDistrict.message}</p>}
-                  </div>
-                  <div>
-                    <label className="form-label">Mandal *</label>
-                    <input id="presentMandal" className="form-input" placeholder="Enter Mandal" autoComplete="off"
-                      {...register('presentMandal', { required:'Mandal is required' })}/>
-                    {errors.presentMandal && <p className="form-error">{errors.presentMandal.message}</p>}
-                  </div>
-                  <div>
-                    <label className="form-label">Village *</label>
-                    <input id="presentVillage" className="form-input" placeholder="Enter Village" autoComplete="off"
-                      {...register('presentVillage', { required:'Village is required' })}/>
-                    {errors.presentVillage && <p className="form-error">{errors.presentVillage.message}</p>}
-                  </div>
-                  <div>
-                    <label className="form-label">Pincode *</label>
-                    <input id="presentPincode" type="text" inputMode="numeric" maxLength={6}
-                      className="form-input" placeholder="6-digit pincode" autoComplete="off"
-                      {...register('presentPincode', { required:'Pincode is required', pattern:{value:/^\d{6}$/,message:'Pincode must be 6 digits'} })}/>
-                    {errors.presentPincode && <p className="form-error">{errors.presentPincode.message}</p>}
-                  </div>
-                </div>
-              </div>
-
-              {/* Permanent Address — explicit fields, NOT .map() */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-black text-primary-800 text-sm uppercase tracking-wide flex items-center gap-2">
-                    <span className="w-6 h-6 bg-orange-500 rounded-full text-white text-xs flex items-center justify-center font-black">A</span>
-                    Permanent Address
-                  </h3>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={sameAddress}
-                      onChange={e => handleSameAddress(e.target.checked)}
-                      className="w-4 h-4 accent-primary-700 rounded"/>
-                    <span className="text-xs font-bold text-primary-700">Same as Present Address</span>
-                  </label>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="form-label">Country *</label>
-                    <input id="permanentCountry" className="form-input disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      placeholder="Country" autoComplete="off" disabled={sameAddress}
-                      {...register('permanentCountry', { required:'Country is required' })}/>
-                    {errors.permanentCountry && <p className="form-error">{errors.permanentCountry.message}</p>}
-                  </div>
-                  <div>
-                    <label className="form-label">State *</label>
-                    <select id="permanentState" className="form-input disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      disabled={sameAddress}
-                      {...register('permanentState', { required:'State is required' })}>
-                      <option value="">Select State</option>
-                      {STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    {errors.permanentState && <p className="form-error">{errors.permanentState.message}</p>}
-                  </div>
-                  <div>
-                    <label className="form-label">District *</label>
-                    <select id="permanentDistrict" className="form-input disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      disabled={sameAddress}
-                      {...register('permanentDistrict', { required:'District is required' })}>
-                      <option value="">Select District</option>
-                      {DISTRICTS_TS.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                    {errors.permanentDistrict && <p className="form-error">{errors.permanentDistrict.message}</p>}
-                  </div>
-                  <div>
-                    <label className="form-label">Mandal *</label>
-                    <input id="permanentMandal" className="form-input disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      placeholder="Enter Mandal" autoComplete="off" disabled={sameAddress}
-                      {...register('permanentMandal', { required:'Mandal is required' })}/>
-                    {errors.permanentMandal && <p className="form-error">{errors.permanentMandal.message}</p>}
-                  </div>
-                  <div>
-                    <label className="form-label">Village *</label>
-                    <input id="permanentVillage" className="form-input disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      placeholder="Enter Village" autoComplete="off" disabled={sameAddress}
-                      {...register('permanentVillage', { required:'Village is required' })}/>
-                    {errors.permanentVillage && <p className="form-error">{errors.permanentVillage.message}</p>}
-                  </div>
-                  <div>
-                    <label className="form-label">Pincode *</label>
-                    <input id="permanentPincode" type="text" inputMode="numeric" maxLength={6}
-                      className="form-input disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      placeholder="6-digit pincode" autoComplete="off" disabled={sameAddress}
-                      {...register('permanentPincode', { required:'Pincode is required', pattern:{value:/^\d{6}$/,message:'Pincode must be 6 digits'} })}/>
-                    {errors.permanentPincode && <p className="form-error">{errors.permanentPincode.message}</p>}
-                  </div>
-                </div>
-              </div>
-
-              {/* CAPTCHA */}
-              <CaptchaWidget onValidate={setCaptchaValid}/>
-
-              {/* Declaration */}
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <h4 className="font-black text-amber-800 text-sm mb-2">📋 Declaration</h4>
-                <p className="text-xs text-amber-700 font-semibold leading-relaxed mb-3">
-                  I have carefully reviewed and fully understood the provided guidelines and fee structure.
-                  I am aware of all the terms, conditions, and associated costs. By acknowledging this, I confirm
-                  that I agree to comply with the specified guidelines and fee requirements.
-                </p>
-                <label className="flex items-start gap-2 cursor-pointer">
-                  <input type="checkbox" checked={declared}
-                    onChange={e => setDeclared(e.target.checked)}
-                    className="w-4 h-4 accent-primary-700 mt-0.5 flex-shrink-0"/>
-                  <span className="text-xs font-bold text-amber-800">
-                    I hereby declare that the above information is true and correct to the best of my knowledge.
-                    I accept the terms and conditions.
-                  </span>
-                </label>
-              </div>
-
-            </div>
-          )}
-        </form>
-
-        {/* Footer buttons */}
-        <div className="flex items-center justify-between px-6 py-4 border-t bg-gray-50">
-          <div className="text-xs text-gray-500 font-semibold">Step {step} of {STEPS.length}</div>
-          <div className="flex gap-3">
-            {step > 1 && (
-              <button type="button" onClick={() => setStep(s => s-1)}
-                className="btn-secondary flex items-center gap-1">
-                <ChevronLeft size={16}/> Back
-              </button>
-            )}
-            {step < STEPS.length ? (
-              <button type="button" onClick={nextStep}
-                className="btn-primary flex items-center gap-1">
-                Next <ChevronRight size={16}/>
-              </button>
-            ) : (
-              <button type="button" onClick={handleSubmit(onSubmit)}
-                disabled={loading || !declared || !captchaValid}
-                className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                {loading ? (
-                  <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>Registering…</>
-                ) : (
-                  <><CheckCircle size={16}/> Register Now</>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-
       </div>
     </div>
-  );
+  )
 }

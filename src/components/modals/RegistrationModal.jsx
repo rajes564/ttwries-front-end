@@ -19,18 +19,18 @@ function StepBar({ current }) {
           <div className="flex flex-col items-center">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black
               text-sm border-2 transition-all
-              ${current > s.id  ? 'bg-green-600 border-green-600 text-white' :
-                current === s.id ? 'bg-orange-500 border-orange-500 text-white shadow-lg scale-110' :
+              ${current > s.id  ? 'border-2 border-white" style={{background:"#8B0000",border: text-white' :
+                current === s.id ? 'text-white shadow-lg scale-110' :
                                    'bg-gray-100 border-gray-300 text-gray-400'}`}>
               {current > s.id ? '✓' : s.icon}
             </div>
             <span className={`text-xs font-bold mt-1 text-center w-20 leading-tight
-              ${current === s.id ? 'text-orange-700' : current > s.id ? 'text-green-700' : 'text-gray-400'}`}>
+              ${current === s.id ? 'text-red-700' : current > s.id ? 'text-red-800' : 'text-gray-400'}`}>
               {s.label}
             </span>
           </div>
           {i < STEPS.length - 1 && (
-            <div className={`h-0.5 w-16 mb-5 mx-1 ${current > s.id ? 'bg-green-500' : 'bg-gray-200'}`} />
+            <div className={`h-0.5 w-8 sm:w-16 mb-5 mx-0.5 sm:mx-1 ${current > s.id ? 'bg-red-600' : 'bg-gray-200'}`} />
           )}
         </React.Fragment>
       ))}
@@ -81,7 +81,7 @@ function CaptchaField({ captchaText, captchaLoading, onRefresh, value, onChange,
       <label className="label">Security Code <span className="text-red-500">*</span></label>
       <div className="flex items-center gap-2">
         <button type="button" onClick={onRefresh} title="Click to refresh"
-          className="flex-shrink-0 w-32 h-11 border-2 border-green-400 rounded-lg
+          className="flex-shrink-0 w-full sm:w-32 h-12 border-2 rounded-lg
                      flex items-center justify-center relative overflow-hidden
                      bg-gradient-to-br from-green-50 to-emerald-100 select-none">
           <div className="absolute inset-0 opacity-10"
@@ -125,7 +125,7 @@ function AadhaarStep({ onNext }) {
 
   return (
     <form onSubmit={handleNext} noValidate className="space-y-4">
-      <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg p-3 text-xs text-yellow-800 font-semibold">
+      <div className="border-l-4 rounded-r-lg p-3 text-xs font-semibold" style={{background:"#fff8e1",borderColor:"#ffd600",color:"#5a3a00"}}>
         ℹ️ Enter your 12-digit Aadhaar number. It will be used to verify your identity.
       </div>
       <LabeledInput id="aadhaar" label="Aadhaar Number" inputMode="numeric" maxLength={12}
@@ -183,13 +183,13 @@ function PersonalStep({ onNext, onBack, saved }) {
 
   return (
     <form onSubmit={handleNext} noValidate className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <LabeledInput id="p-name"   label="Candidate Name"           value={form.candidateName}   error={errors.candidateName}  onChange={handleChange('candidateName')}  placeholder="Full name as per records"/>
         <LabeledInput id="p-father" label="Father's / Guardian Name" value={form.fatherName}      error={errors.fatherName}     onChange={handleChange('fatherName')}     placeholder="Father's full name"/>
         <LabeledInput id="p-mother" label="Mother's / Guardian Name" value={form.motherName}      error={errors.motherName}     onChange={handleChange('motherName')}     placeholder="Mother's full name"/>
         <LabeledInput id="p-dob"    label="Date of Birth" type="date" value={form.dateOfBirth}    error={errors.dateOfBirth}    onChange={handleChange('dateOfBirth')}/>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <LabeledSelect id="p-gender" label="Gender" value={form.gender} error={errors.gender}
           options={['Female','Male','Other (Third Gender)']}  placeholder="Select Gender"
           onChange={handleChange('gender')}/>
@@ -197,11 +197,11 @@ function PersonalStep({ onNext, onBack, saved }) {
         <LabeledInput id="p-mobile2" label="Confirm Mobile"  type="tel" maxLength={10} value={form.confirmMobile}   error={errors.confirmMobile}  onChange={handleChange('confirmMobile')}  placeholder="Re-enter mobile"/>
         <LabeledInput id="p-altmob" label="Alternate Mobile" type="tel" maxLength={10} value={form.alternateMobile} required={false}              onChange={handleChange('alternateMobile')} placeholder="Optional"/>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <LabeledInput id="p-email"  label="Email Address" type="email" value={form.email}        error={errors.email}        onChange={handleChange('email')}        placeholder="your@email.com"/>
         <LabeledInput id="p-email2" label="Confirm Email" type="email" value={form.confirmEmail} error={errors.confirmEmail} onChange={handleChange('confirmEmail')} placeholder="Re-enter email"/>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <LabeledSelect id="p-idtype" label="ID Type" value={form.idType} error={errors.idType}
           options={ID_TYPES} placeholder="Select ID Type" onChange={handleChange('idType')}/>
         <LabeledInput id="p-idno" label="ID Number" value={form.idNumber} error={errors.idNumber}
@@ -243,7 +243,7 @@ function AddressStep({ onSubmit, onBack, saved, loading }) {
 
   // useCallback so input onChanges are stable references
   const handleChange = useCallback((field) => (e) => {
-    const val = e.target ? e.target.value : e   
+    const val = e.target ? e.target.value : e   // handle both event and raw value
     setForm(p => {
       const next = { ...p, [field]: val }
       if (field === 'sameAsPresent' && val) {
@@ -295,7 +295,7 @@ function AddressStep({ onSubmit, onBack, saved, loading }) {
       {/* Present Address */}
       <div className="form-section">
         <div className="section-title">📍 Present Address</div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <LabeledInput  id="p-country"  label="Country"       value={form.pCountry}  onChange={handleChange('pCountry')}/>
           <LabeledSelect id="p-state"    label="State"         value={form.pState}    onChange={handleChange('pState')}    error={errors.pState}    options={STATES}/>
           <LabeledSelect id="p-district" label="District"      value={form.pDistrict} onChange={handleChange('pDistrict')} error={errors.pDistrict} options={TELANGANA_DISTRICTS}/>
@@ -314,7 +314,7 @@ function AddressStep({ onSubmit, onBack, saved, loading }) {
             checked={form.sameAsPresent} onChange={handleCheckbox}/>
           <span className="text-sm font-bold text-primary-700">Same as Present Address</span>
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <LabeledInput  id="pm-country"  label="Country"       value={form.permCountry}  disabled={dis} onChange={handleChange('permCountry')}/>
           <LabeledSelect id="pm-state"    label="State"         value={form.permState}    disabled={dis} onChange={handleChange('permState')}    error={errors.permState}    options={STATES}/>
           <LabeledSelect id="pm-district" label="District"      value={form.permDistrict} disabled={dis} onChange={handleChange('permDistrict')} error={errors.permDistrict} options={TELANGANA_DISTRICTS}/>
@@ -380,11 +380,6 @@ export default function RegistrationModal({ onClose }) {
   const back2 = useCallback(() => setStep(2), [])
 
   const handleFinalSubmit = useCallback(async (data) => {
-console.log("---------------------------------------------------------------------------")
-console.log("---------------------------------------------------------------------------")
-    console.table(data);
-    console.log("---------------------------------------------------------------------------")
-    console.log("---------------------------------------------------------------------------")
     setLoading(true)
     try {
       const res = await api.post('/registration/register', { ...formData, ...data })
@@ -397,26 +392,26 @@ console.log("-------------------------------------------------------------------
   }, [formData])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0"
-             style={{background:'linear-gradient(135deg,#0d3b0d,#1b5e20)'}}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-white w-full sm:max-w-2xl sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[95vh] sm:max-h-[92vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0"
+             style={{background:'linear-gradient(135deg,#3d0000,#8B0000)'}}>
           <div>
             <h2 className="text-white font-black text-lg">📝 New Candidate Registration</h2>
-            <p className="text-green-200 text-xs font-semibold">TTWREIS Admission Portal 2025-26</p>
+            <p className="text-red-200 text-xs font-semibold">TTWREIS Admission Portal 2025-26</p>
           </div>
           <button type="button" onClick={onClose}
             className="text-white hover:text-red-300 font-black text-2xl leading-none">✕</button>
         </div>
 
-        <div className="overflow-y-auto flex-1 p-6">
+        <div className="overflow-y-auto flex-1 px-4 py-4 sm:p-6">
           {success ? (
             <div className="text-center py-8">
               <div className="text-6xl mb-4">🎉</div>
-              <h3 className="text-2xl font-black text-green-700 mb-2">Registration Successful!</h3>
-              <div className="bg-green-50 border-2 border-green-400 rounded-xl p-5 inline-block text-left mt-2 max-w-sm">
+              <h3 className="text-2xl font-black mb-2" style={{color:"#8B0000"}}>Registration Successful!</h3>
+              <div className="border-2 rounded-xl p-5 inline-block text-left mt-2 max-w-sm w-full" style={{background:"#fdf2f2",borderColor:"#8B0000"}}>
                 <p className="text-sm font-bold text-gray-700">Your Registration Number:</p>
-                <p className="text-3xl font-black text-green-700 mt-1 tracking-wider">{success.registrationNumber}</p>
+                <p className="text-3xl font-black mt-1 tracking-wider" style={{color:"#8B0000"}}>{success.registrationNumber}</p>
                 <div className="mt-3 space-y-1">
                   <p className="text-xs text-gray-600 font-semibold">🔑 Default Password: <strong>Date of Birth (DD-MM-YYYY)</strong></p>
                   <p className="text-xs text-gray-600 font-semibold">📱 Sent to mobile: {success.mobile}</p>
